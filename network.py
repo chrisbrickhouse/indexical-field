@@ -73,7 +73,16 @@ class MCTsearch():
         ):
         total = 0
         self.depth = depth
-        if type(targets) is not list:
+        nodes = self.graph.graph.nodes()
+        if type(targets) is int:
+            t = []
+            for _ in range(targets):
+                x = random.choice(nodes)
+                while x in t or x in choices:
+                    x = random.choice(nodes)
+                t.append(x)
+            self.win_con = t
+        elif type(targets) is not list:
             self.win_con = [targets]
         else:
             self.win_con = targets
@@ -81,10 +90,7 @@ class MCTsearch():
             choices = [choices]
         else:
             choices = choices
-        if threshold:
-            self.threshold = threshold
-        else:
-            self.threshold = self.threshold
+        self.threshold = threshold
         self.choice_dict = {}
         for choice in choices:
             self.choice_dict[choice] = {
@@ -99,11 +105,11 @@ class MCTsearch():
         h_copy = history+['temp']
         self.choices = choices
         while datetime.datetime.utcnow() - begin < time_d:
-            print('===================')
-            print('==               ==')
-            print('==   New round   ==')
-            print('==               ==')
-            print('===================')
+            # DEBUG print('===================')
+            # DEBUG print('==               ==')
+            # DEBUG print('==   New round   ==')
+            # DEBUG print('==               ==')
+            # DEBUG print('===================')
             try:
                 choice = random.choice(choices)
             except IndexError:
@@ -122,14 +128,51 @@ class MCTsearch():
             total += 1
         return(self.choice_dict)
 
+    def tune(
+            self,
+            choices,
+            targets,
+            params='depth',
+            n = 60,
+            time = 5,
+            depth = 5,
+            history = [],
+            threshold = 0.05
+        ):
+        p_ratio_list = []
+        for i in range(n):
+            print(i)
+            if params == 'depth':
+                depth = random.randint(5,200)
+            elif params == 'time':
+                time = random.randint(1,60)
+            elif params == 'threshold':
+                threshold = random.random()
+            cdict = self.speech_act(choices,targets,time,depth,history,threshold)
+            a = cdict['a']['wins']/cdict['a']['trials']
+            na = cdict['na']['wins']/cdict['na']['trials']
+            p_win = a * na
+            entry = {
+                'time': time,
+                'depth': depth,
+                'threshold': threshold,
+                'p_win': p_win,
+                'a':a,
+                'na':na
+            }
+            p_ratio_list.append(entry)
+        #x = [z[params] for z in p_ratio_list]
+        #y = [z['p_win'] for z in p_ratio_list]
+        return(p_ratio_list)
+
     def _simulate(self, choices, history, p, d_count = 0):
         # Choose move from choices
         # if move is a win or loss, back propogate
         # otherwise go deeper
         #
         # Local reference to attributes
-        print('=======SIM-START========')
-        print('Choices: '+str(choices))
+        # DEBUG print('=======SIM-START========')
+        # DEBUG print('Choices: '+str(choices))
         cdict = self.choice_dict
         G = self.graph
         win_con = self.win_con
@@ -147,7 +190,7 @@ class MCTsearch():
                     'wins': 0.0,
                     'trials':0.0,
                 }
-        print('Total: '+str(total))
+        # DEBUG print('Total: '+str(total))
         # Choose association from choices
         if total > 3 * len(choices):
             # if each choice has, on average, 3 choices, always choose the
@@ -161,7 +204,7 @@ class MCTsearch():
                     c = self._conf_int(t,total)
                     ucb = x + c
                 except ZeroDivisionError:
-                    print(choice,w,t)
+                    # DEBUG print(choice,w,t)
                     ucb = 1.0
                 if ucb > 1.0:
                     # If UCB allows for p > 1, ceiling at 1
@@ -180,7 +223,7 @@ class MCTsearch():
         elif total < len(choices):
             # Ensure that each choice is searched at least once
             not_searched = [x for x in choices if cdict[x]['trials']==0]
-            print('NS: '+str(not_searched))
+            # DEBUG print('NS: '+str(not_searched))
             choice = random.choice(not_searched)
             try:
                 p = cdict[choice]['p']
@@ -211,10 +254,10 @@ class MCTsearch():
         history.append(choice)
         neighbors = G.possible_associations(history)
         # DEBUG print('History: '+str(history))
-        print('Choice: '+str(choice))
-        print('Neighbors :'+str(neighbors))
+        # DEBUG print('Choice: '+str(choice))
+        # DEBUG print('Neighbors :'+str(neighbors))
         p, result = self._check_win(neighbors,history,p,d_count)
-        print(result)
+        # DEBUG print(result)
         cdict[choice]['p_history'].append(p)
         #cdict[choice]['p'] = mean(cdict[choice]['p_history'])
         if p > 0.0:
@@ -223,7 +266,7 @@ class MCTsearch():
         else:
             cdict[choice]['trials'] +=1
         self.choice_dict = cdict
-        print('========SIM-END==========')
+        # DEBUG print('========SIM-END==========')
         return(p)
 
     def _conf_int(self,plays,total):
@@ -233,10 +276,10 @@ class MCTsearch():
         return(conf)
 
     def _check_win(self,neighbors,history,p,d_count):
-        print('=========CHECK-START==========')
+        # DEBUG print('=========CHECK-START==========')
         # DEBUG print('C_History: '+str(history))
-        print('C_Neighbors: ' + str(neighbors))
-        print('d_count: '+ str(d_count))
+        # DEBUG print('C_Neighbors: ' + str(neighbors))
+        # DEBUG print('d_count: '+ str(d_count))
         G = self.graph.graph
         targets = self.win_con
         depth = self.depth
@@ -244,8 +287,8 @@ class MCTsearch():
         cdict = self.choice_dict
         n_node = history[-1]
         o_node = history[-2]
-        print('o_node: '+str(o_node))
-        print('n_node: '+str(n_node))
+        # DEBUG print('o_node: '+str(o_node))
+        # DEBUG print('n_node: '+str(n_node))
         if d_count >= depth:
             # Loss : depth limit
             p = 0.0
@@ -256,7 +299,7 @@ class MCTsearch():
             p = 0.0
             r = 'Deadend'
             return(p,r)
-        elif n_node == o_node:
+        elif n_node in history[:-1]:
             # Loss : snake
             p = 0.0
             r = 'Snake'
@@ -285,8 +328,9 @@ def mean(l):
     s = float(sum(l))
     n = float(len(l))
     x = s / n
+    return(x)
 
-def main(depth = 5):
+def main(targets=3, time = 5, depth = 5, history=[], threshold = 0.05):
     G = IndexicalField()
     choices = ['a','na']
     G.add_nodes_from([1,2,3,4,5,6,7,8,9,10]+choices,trials=0,wins=0)
@@ -305,15 +349,9 @@ def main(depth = 5):
         (4,8,{'weight':1.0}),
         (5,10,{'weight':1.0})
     ])
-    target = []
-    for _ in range(3):
-        x = random.randint(1,10)
-        while x in target:
-            x = random.randint(1,10)
-        target.append(x)
     MCT = MCTsearch(G)
-    cdict = MCT.speech_act(choices,target,depth=depth,time=5)
-    print(target)
+    cdict = MCT.speech_act(choices,targets,time,depth,history,threshold)
+    print(MCT.win)
     return(cdict)
 
 #plt.subplot(111)
