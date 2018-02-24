@@ -1,10 +1,12 @@
 #!/usr/bin/python
 
+from collections import Counter
 import matplotlib.pyplot as plt
 import networkx as nx
 import datetime
 import random
 import math
+import csv
 
 class IndexicalField():
     def __init__(self,nodes=None,edges=None, threshold=0.05):
@@ -164,6 +166,136 @@ class MCTsearch():
         #x = [z[params] for z in p_ratio_list]
         #y = [z['p_win'] for z in p_ratio_list]
         return(p_ratio_list)
+
+    def read_data(self, fname, header = True, **kwargs):
+        row_list = []
+        with open(fname,'r') as csv_file:
+            reader = csv.reader(csv_file,**kwargs)
+            if header:
+                next(reader)
+            for row in reader:
+                row_list.append(row)
+        self.data = row_list
+
+    def _network_from_data(
+            self,
+            G = None,
+            participant_col=0,
+            conditions_dict={
+                1:{
+                    0:'K',
+                    1:'S',
+                },
+                2:{
+                    0:'casual',
+                    1:'careful'
+                },
+                3:{
+                    0:'t-deletion',
+                    1:'t-flapping',
+                    2:'schwa-reduction',
+                    3:'minimal-variation',
+                    4:'combination'
+                }
+            },
+            node_col=4,
+            threshold = 0.05
+        ):
+        rows = self.data
+        nodes = [x[node_col] for x in rows if '(' not in x[node_col]]
+        nodes = set(nodes)
+        participant_answers = {}
+        answers_by_condition = {}
+        for col in conditions_dict:
+            answers_by_condition[col] = {}
+            for cond in conditions_dict[col]:
+                #print(col,cond, [int(x[col]) == cond for x in rows])
+                answer_list = [x[node_col] for x in rows if int(x[col]) == cond]
+                #print(col,cond,answer_list)
+                answers_by_condition[col][cond] = answer_list
+        for row in rows:
+            participant = row[participant_col]
+            if participant not in participant_answers:
+                participant_answers[participant] = []
+            participant_answers[participant].append(row[node_col])
+        set_count = float(len(participant_answers))
+        weights = {}
+        for i in nodes:
+            j_runs = 0
+            if i not in weights:
+                weights[i] = {
+                    'count': 0, # how many times i occurs
+                    'p': 0.0
+                }
+            for j in nodes:
+                if i == j:
+                    continue
+                j_runs += 1
+                if j not in weights[i]:
+                    weights[i][j] = {
+                        'count': 0, # how many times i and j co-occur
+                        'weight': 1.0
+                    }
+                p_count = 0
+                for participant in participant_answers:
+                    p_count += 1
+                    if i in participant_answers[participant]:
+                        if j_runs <= 1:
+                            weights[i]['count']+=1
+                        if j in participant_answers[participant]:
+                            weights[i][j]['count'] += 1
+                if weights[i]['count'] > p_count:
+                    raise(ValueError(f'Count for {i} is greater than the number of participants.'))
+                i_j_count = float(weights[i][j]['count'])
+                i_count = float(weights[i]['count'])
+                try:
+                    weights[i][j]['weight'] = i_j_count / i_count
+                except ZeroDivisionError:
+                    weights[i][j]['weight'] = 0.0
+                try:
+                    weights[i]['p'] = i_count / set_count
+                except ZeroDivisionError:
+                    weights[i]['p'] = 0.0
+        for col in conditions_dict:
+            p_id = []
+            for cond in conditions_dict[col]:
+                p_ids = set([x[participant_col] for x in rows if x[col] == cond])
+                i = conditions_dict[col][cond]
+                counted_nodes = Counter(answers_by_condition[col][cond])
+                c_nodes_sum = 0
+                for n in counted_nodes:
+                    c_nodes_sum += counted_nodes[n]
+                if i not in weights:
+                    weights[i] = {
+                        'count': len(p_ids),
+                        'p': float(len(p_ids))/len(participant_answers)
+                    }
+                for j in nodes:
+                    if j not in counted_nodes:
+                        weights[i][j] = {
+                            'count': 0,
+                            'weight': 0.0
+                        }
+                    else:
+                        weights[i][j] = {
+                            'count': counted_nodes[j],
+                            'weight': float(counted_nodes[j])/c_nodes_sum
+                        }
+        if not G:
+            G = self.graph.graph
+        node_list = [x for x in weights]
+        edge_list = []
+        for i in weights:
+            for j in weights[i]:
+                if j in ['count','p']:
+                    continue
+                w = weights[i][j]['weight']
+                edge = (i,j,{'weight':w})
+                if w > threshold:
+                    print(weights[i][j]['count'],weights[i]['count'],edge)
+                    edge_list.append(edge)
+        G.add_nodes_from(node_list,trials=0,wins=0)
+        G.add_edges_from(edge_list)
 
     def _simulate(self, choices, history, p, d_count = 0):
         # Choose move from choices
