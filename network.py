@@ -436,7 +436,7 @@ class MCTsearch():
             p = 0.0
             r = 'Snake'
             return(p,r)
-        p = p * G.edge[o_node][n_node]['weight']
+        p *= self.conditional_prob(n_node,o_node)
         if n_node in targets:
             # Win
             r = 'Win'
@@ -455,6 +455,15 @@ class MCTsearch():
                 cdict[n_node]['trials'] +=1
         self.choice_dict = cdict
         return(p,r)
+
+    def conditional_prob(self,a,b):
+        choices = self.graph.possible_associations(b)
+        weights = []
+        for choice in choices:
+            weights.append(G.edge[b][choice]['weight'])
+        p_a_norm = G.edge[b][a]['weight'] / sum(weights)
+        return(p_a_norm)
+
 
 def mean(l):
     s = float(sum(l))
