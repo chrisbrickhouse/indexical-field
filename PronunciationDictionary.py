@@ -20,7 +20,7 @@ class Dictionary():
         sections = {}
         with open(wl_path,'r') as wl:
             for row in wl.readlines():
-                if row[0] = '#':
+                if row[0] == '#':
                     comment = row[1:].strip()
                     sections[comment] = []
                 word = row.strip().upper()
@@ -53,7 +53,7 @@ class Dictionary():
             return(choices)
         elif rule == 't-flapping':
             choices[0] = mp_copy
-            choices[1] = [x for x in mp_copy if x != 'T' else 'D']
+            choices[1] = [x if x != 'T' else 'D' for x in mp_copy]
             return(choices)
         elif rule == 'schwa-reduction':
             choices[0] = mp_copy
