@@ -297,6 +297,98 @@ class MCTsearch():
                     edge_list.append(edge)
         G.add_nodes_from(node_list,trials=0,wins=0)
         G.add_edges_from(edge_list)
+        self.nodes = node_list
+        self.edges = edge_list
+
+    def _set_priors(self,node_col,header=True):
+        start = 1 if header == True else 0
+        self.p_targets = {}
+        rows = self.data
+        node_count = 0.0
+        for row in rows[start:]:
+            node_count += 1.0
+            name = row[node_col]
+            if name not in self.p_targets:
+                self.p_targets[name] = {
+                    'count': 0,
+                    'p': 0.0
+                }
+            self.p_targets[name]['count'] += 1
+        for name in self.p_targets:
+            p = self.p_targets[name]['count'] / node_count
+            self.p_targets[name]['p'] = p
+        condition_dict_by_condition = {
+            'K':(1,0),
+            'S':(1,1),
+            'casual':(2,0),
+            'careful':(2,1),
+            't-deletion':(3,0),
+            't-flapping':(3,1),
+            'schwa-reduction':(3,2),
+            'minimal':(3,3)
+        }
+        self.p_condition = {}
+        # The following could probably be done more easily as a recursive
+        #   call for each depth level.
+        prts = []
+        trial_count = 0.0
+        for row in rows[start:]:
+            for cond in condition_dict_by_condition:
+                prt = row[participant_col]
+                if prt in prts:
+                    continue
+                else:
+                    trial_count += 1.0
+                    prts.append(prt)
+                if cond not in self.p_condition:
+                    self.p_condition[cond] = {
+                        'count':0
+                    }
+                col,val = condition_dict_by_condition[cond]
+                if int(row[col]) == val:
+                    self.p_condition[cond]['count'] += 1
+                    for cond2 in condition_dict_by_condition:
+                        col2,val2 = condition_dict_by_condition[cond]
+                        if col2 == col:
+                            continue
+                        if cond2 not in self.p_condition[cond]:
+                            self.p_condition[cond][cond2] = {
+                                'count': 0
+                            }
+                        if int(row[col2]) == val2:
+                            self.p_condition[cond][cond2]['count'] += 1
+                            for cond3 in condition_dict_by_condition:
+                                col3,val3 = condition_dict_by_condition[cond][cond2]
+                                if col3 in [col,col2]:
+                                    continue
+                                if cond3 not in self.p_condition[cond][cond2]:
+                                    self.p_condition[cond][cond2][cond3] = {
+                                        'count': 0
+                                    }
+                                if int(row[col3]) == val3:
+                                        self.p_condition[cond][cond2][cond3]['count'] += 1
+        for c in self.p_condition:
+            p = self.p_condition[c]['count'] / trial_count
+            self.p_condition[c]['p'] = p
+            for c2 in self.p_condition[c]:
+                if c2 in ['count','p']:
+                    continue
+                p = float(self.p_condition[c][c2]['count']) / self.p_condition[c]['count']
+                self.p_condition[c][c2]['p'] = p
+                for c3 in self.p_condition[c][c2]:
+                    if c3 in ['count']['p']:
+                        continue
+                    ct = float(self.p_condition[c][c2][c3]['count'])
+                    uct = self.p_condition[c][c2]['count']
+                    p = ct / uct
+                    self.p_condition[c][c2][c3]['p'] = p
+
+    def prob(self,x):
+        if x in self.p_condition:
+            p = self.p_condition[x]['p']
+        else:
+            p = self.p_targets[x]['p']
+        return(p)
 
     def _simulate(self, choices, history, p, d_count = 0):
         # Choose move from choices
