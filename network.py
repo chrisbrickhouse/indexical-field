@@ -3,6 +3,7 @@
 from collections import Counter
 import matplotlib.pyplot as plt
 import networkx as nx
+import Dictionary
 import datetime
 import random
 import math
