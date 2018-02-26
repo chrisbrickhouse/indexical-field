@@ -295,12 +295,13 @@ class MCTsearch():
                 if w > threshold:
                     print(weights[i][j]['count'],weights[i]['count'],edge)
                     edge_list.append(edge)
-        G.add_nodes_from(node_list,trials=0,wins=0)
-        G.add_edges_from(edge_list)
         self.nodes = node_list
         self.edges = edge_list
+        self.joint_prob_list = weights
+        G.add_nodes_from(node_list,trials=0,wins=0)
+        G.add_edges_from(edge_list)
 
-    def _set_priors(self,node_col,header=True):
+    def _set_priors(self,node_col,participant_col=0,header=True):
         start = 1 if header == True else 0
         self.p_targets = {}
         rows = self.data
@@ -333,13 +334,14 @@ class MCTsearch():
         prts = []
         trial_count = 0.0
         for row in rows[start:]:
+            prt = row[participant_col]
+            if prt in prts:
+                continue
+            else:
+                trial_count += 1.0
+                prts.append(prt)
             for cond in condition_dict_by_condition:
-                prt = row[participant_col]
-                if prt in prts:
-                    continue
-                else:
-                    trial_count += 1.0
-                    prts.append(prt)
+                print(cond, cond in self.p_condition)
                 if cond not in self.p_condition:
                     self.p_condition[cond] = {
                         'count':0
@@ -348,7 +350,7 @@ class MCTsearch():
                 if int(row[col]) == val:
                     self.p_condition[cond]['count'] += 1
                     for cond2 in condition_dict_by_condition:
-                        col2,val2 = condition_dict_by_condition[cond]
+                        col2,val2 = condition_dict_by_condition[cond2]
                         if col2 == col:
                             continue
                         if cond2 not in self.p_condition[cond]:
@@ -358,7 +360,7 @@ class MCTsearch():
                         if int(row[col2]) == val2:
                             self.p_condition[cond][cond2]['count'] += 1
                             for cond3 in condition_dict_by_condition:
-                                col3,val3 = condition_dict_by_condition[cond][cond2]
+                                col3,val3 = condition_dict_by_condition[cond3]
                                 if col3 in [col,col2]:
                                     continue
                                 if cond3 not in self.p_condition[cond][cond2]:
@@ -376,7 +378,7 @@ class MCTsearch():
                 p = float(self.p_condition[c][c2]['count']) / self.p_condition[c]['count']
                 self.p_condition[c][c2]['p'] = p
                 for c3 in self.p_condition[c][c2]:
-                    if c3 in ['count']['p']:
+                    if c3 in ['count','p']:
                         continue
                     ct = float(self.p_condition[c][c2][c3]['count'])
                     uct = self.p_condition[c][c2]['count']
@@ -387,8 +389,17 @@ class MCTsearch():
         if x in self.p_condition:
             p = self.p_condition[x]['p']
         else:
-            p = self.p_targets[x]['p']
+            try:
+                p = self.p_targets[x]['p']
+            except KeyError:
+                print([y for y in self.p_condition])
         return(p)
+
+    def joint_prob(self,x,y):
+        try:
+            return(self.joint_prob_list[x][y]['weight'])
+        except KeyError:
+            return(0.0)
 
     def _simulate(self, choices, history, p, d_count = 0):
         # Choose move from choices
