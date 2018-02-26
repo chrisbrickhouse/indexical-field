@@ -297,7 +297,7 @@ class MCTsearch():
                     edge_list.append(edge)
         self.nodes = node_list
         self.edges = edge_list
-        self.joint_prob_list = weights
+        self.cond_prob_list = weights
         G.add_nodes_from(node_list,trials=0,wins=0)
         G.add_edges_from(edge_list)
 
@@ -395,11 +395,22 @@ class MCTsearch():
                 print([y for y in self.p_condition])
         return(p)
 
-    def joint_prob(self,x,y):
-        try:
-            return(self.joint_prob_list[x][y]['weight'])
-        except KeyError:
-            return(0.0)
+    def cond_prob(self,a,b):
+        cp = self.cond_prob_list
+        if b in cp and a in cp[b]:
+            p = cp[b][a]['weight']
+        else:
+            try:
+                p = self.p_condition[b][a]['p']
+            except KeyError:
+                print('WARNING Key Error')
+                p = 0.0
+        return(p)
+
+    def joint_prob(self,a,b):
+        cond = self.cond_prob(a,b)
+        j = cond * self.prob(b)
+        return(j)
 
     def _simulate(self, choices, history, p, d_count = 0):
         # Choose move from choices
